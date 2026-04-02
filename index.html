@@ -1,7 +1,27 @@
 <!DOCTYPE html>
 <html>
+<head>
+<script>
+function myFunction()
+{
+//  document.getElementById("demo").innerHTML = "Paragraph changed.";
+  let player =
+  {
+  	name: "Valeria",
+  	level: 12,
+  	inventory: ["Healing Potion", "Iron Shield", "Map"]
+  };
+  document.getElementById("demo").innerHTML = player.inventory[0];
+}
+</script>
+</head>
 <body>
-<h1>Hello World</h1>
-<p>I'm hosted with GitHub Pages.</p>
+
+<h2>Demo JavaScript in Head</h2>
+
+<p id="demo">A Paragraph.</p>
+
+<button type="button" onclick="myFunction()">Try it</button>
+
 </body>
-</html>
+</html> 
