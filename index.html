@@ -1,27 +1,196 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<script>
-function myFunction()
-{
-//  document.getElementById("demo").innerHTML = "Paragraph changed.";
-  let player =
-  {
-  	name: "Valeria",
-  	level: 12,
-  	inventory: ["Healing Potion", "Iron Shield", "Map"]
-  };
-  document.getElementById("demo").innerHTML = player.inventory[0];
-}
-</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ella RFID Checker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { color: #a78bfa; text-align: center; margin-bottom: 8px; }
+    .subtitle { text-align: center; color: #666; margin-bottom: 30px; font-size: 14px; }
+
+    .card { background: #1a1a2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border: 1px solid #2a2a4a; }
+    .card h2 { color: #a78bfa; font-size: 16px; margin-bottom: 16px; border-bottom: 1px solid #2a2a4a; padding-bottom: 8px; }
+
+    label { display: block; color: #999; font-size: 12px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    input, select { width: 100%; padding: 10px 14px; background: #0f0f1a; border: 1px solid #3a3a5a; border-radius: 8px; color: #e0e0e0; font-size: 14px; margin-bottom: 12px; }
+    input:focus, select:focus { outline: none; border-color: #a78bfa; }
+
+    button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: #a78bfa; color: #0f0f1a; }
+    .btn-primary:hover { background: #8b6fdb; }
+    .btn-primary:disabled { background: #555; cursor: not-allowed; }
+    .btn-secondary { background: #2a2a4a; color: #a78bfa; margin-top: 8px; }
+    .btn-secondary:hover { background: #3a3a5a; }
+    .btn-danger { background: #ef4444; color: white; margin-top: 8px; }
+    .btn-danger:hover { background: #dc2626; }
+
+    .response { background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 8px; padding: 16px; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; min-height: 60px; max-height: 300px; overflow-y: auto; margin-top: 12px; }
+    .response.error { border-color: #ef4444; color: #ef4444; }
+    .response.success { border-color: #22c55e; color: #22c55e; }
+    .response.waiting { color: #666; }
+
+    .status-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #555; }
+    .status-dot.connected { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .status-dot.connecting { background: #f59e0b; animation: pulse 1s infinite; }
+    .status-dot.disconnected { background: #ef4444; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .status-text { font-size: 13px; color: #999; }
+
+    .event-log { max-height: 200px; overflow-y: auto; }
+    .event-item { background: #0f0f1a; border-left: 3px solid #a78bfa; padding: 8px 12px; margin-bottom: 8px; border-radius: 0 6px 6px 0; font-size: 12px; }
+    .event-item .time { color: #666; font-size: 11px; }
+    .event-item .data { color: #22c55e; margin-top: 4px; font-family: monospace; }
+  </style>
 </head>
 <body>
+  <div class="container">
+    <h1>🔮 Ella RFID Checker</h1>
+    <p class="subtitle">Synergybot Staging API Test Tool</p>
 
-<h2>Demo JavaScript in Head</h2>
+    <!-- WebSocket Connection -->
+    <div class="card">
+      <h2>📡 WebSocket Listener</h2>
+      <div class="status-bar">
+        <div class="status-dot" id="wsStatus"></div>
+        <span class="status-text" id="wsStatusText">Disconnected</span>
+      </div>
+      <button class="btn-primary" id="wsConnectBtn" onclick="connectWS()">Connect</button>
+      <button class="btn-danger" id="wsDisconnectBtn" onclick="disconnectWS()" style="display:none;">Disconnect</button>
+      <div id="eventLog" class="event-log" style="margin-top:12px;"></div>
+    </div>
 
-<p id="demo">A Paragraph.</p>
+    <!-- RFID Scan POST -->
+    <div class="card">
+      <h2>📤 POST /rfid/scan</h2>
+      <label>Station</label>
+      <input type="text" id="station" value="ella-vate-your-journey" placeholder="station name">
 
-<button type="button" onclick="myFunction()">Try it</button>
+      <label>Kiosk</label>
+      <input type="number" id="kiosk" value="2" placeholder="kiosk number">
 
+      <label>Type</label>
+      <select id="scanType">
+        <option value="SUBSCRIBE">SUBSCRIBE</option>
+        <option value="UNSUBSCRIBE">UNSUBSCRIBE</option>
+      </select>
+
+      <button class="btn-primary" id="postBtn" onclick="sendPost()">Send POST</button>
+
+      <div class="response waiting" id="postResponse">Response will appear here...</div>
+    </div>
+  </div>
+
+  <script>
+    let ws = null;
+
+    const WS_URL = 'wss://staging-api.synergybot.io/api/clients/v1/lli/sfc/event/listen';
+    const POST_URL = 'https://staging-api.synergybot.io/api/clients/v1/lli/sfc/event/rfid/scan';
+
+    // --- WebSocket ---
+    function connectWS() {
+      const statusDot = document.getElementById('wsStatus');
+      const statusText = document.getElementById('wsStatusText');
+      const connectBtn = document.getElementById('wsConnectBtn');
+      const disconnectBtn = document.getElementById('wsDisconnectBtn');
+
+      statusDot.className = 'status-dot connecting';
+      statusText.textContent = 'Connecting...';
+      connectBtn.disabled = true;
+
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        statusDot.className = 'status-dot connected';
+        statusText.textContent = 'Connected';
+        connectBtn.style.display = 'none';
+        disconnectBtn.style.display = 'block';
+        connectBtn.disabled = false;
+        addEvent('System', '✅ WebSocket connected');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          addEvent('📩 Message', JSON.stringify(data, null, 2));
+        } catch {
+          addEvent('📩 Message', event.data);
+        }
+      };
+
+      ws.onerror = (err) => {
+        statusDot.className = 'status-dot disconnected';
+        statusText.textContent = 'Error: ' + (err.message || 'connection failed');
+        connectBtn.disabled = false;
+        addEvent('❌ Error', err.message || 'WebSocket error');
+      };
+
+      ws.onclose = () => {
+        statusDot.className = 'status-dot disconnected';
+        statusText.textContent = 'Disconnected';
+        connectBtn.style.display = 'block';
+        disconnectBtn.style.display = 'none';
+        connectBtn.disabled = false;
+        addEvent('⚠️ Disconnected', 'WebSocket closed');
+      };
+    }
+
+    function disconnectWS() {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    }
+
+    function addEvent(title, data) {
+      const log = document.getElementById('eventLog');
+      const time = new Date().toLocaleTimeString();
+      const item = document.createElement('div');
+      item.className = 'event-item';
+      item.innerHTML = `<div class="time">${time} — ${title}</div><div class="data">${escapeHtml(data)}</div>`;
+      log.insertBefore(item, log.firstChild);
+    }
+
+    // --- POST ---
+    async function sendPost() {
+      const station = document.getElementById('station').value;
+      const kiosk = document.getElementById('kiosk').value;
+      const scanType = document.getElementById('scanType').value;
+      const responseDiv = document.getElementById('postResponse');
+      const btn = document.querySelector('#postBtn');
+
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      responseDiv.className = 'response waiting';
+      responseDiv.textContent = 'Sending request...';
+
+      const payload = { station, kiosk: parseInt(kiosk), type: scanType };
+
+      try {
+        const res = await fetch(POST_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const text = await res.text();
+        responseDiv.textContent = `Status: ${res.status}\n\n${text}`;
+        responseDiv.className = res.ok ? 'response success' : 'response error';
+      } catch (err) {
+        responseDiv.textContent = 'Error: ' + err.message;
+        responseDiv.className = 'response error';
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Send POST';
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+  </script>
 </body>
-</html> 
+</html>
