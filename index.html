@@ -72,6 +72,9 @@
       <label>Kiosk</label>
       <input type="number" id="kiosk" value="2" placeholder="kiosk number">
 
+      <label>Bearer Token</label>
+      <input type="text" id="bearerToken" placeholder="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..." style="font-family:monospace;font-size:11px;">
+
       <label>Type</label>
       <select id="scanType">
         <option value="SUBSCRIBE">SUBSCRIBE</option>
@@ -159,6 +162,7 @@
       const station = document.getElementById('station').value;
       const kiosk = document.getElementById('kiosk').value;
       const scanType = document.getElementById('scanType').value;
+      const token = document.getElementById('bearerToken').value.trim();
       const responseDiv = document.getElementById('postResponse');
       const btn = document.querySelector('#postBtn');
 
@@ -168,11 +172,13 @@
       responseDiv.textContent = 'Sending request...';
 
       const payload = { station, kiosk: parseInt(kiosk), type: scanType };
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       try {
         const res = await fetch(POST_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(payload)
         });
 
